@@ -1,6 +1,7 @@
 from pymongo import MongoClient
 import os
 import logging
+from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
@@ -37,3 +38,17 @@ def get_all_groups():
 def is_group_allowed(chat_id):
     """Verifica si un grupo está en la base de datos."""
     return db.groups.count_documents({"_id": str(chat_id)}) > 0
+
+def log_unauthorized_group(chat_id, chat_name, added_by_id, added_by_name):
+    """Registra un intento fallido de añadir el bot a un grupo."""
+    db.unauthorized_groups.insert_one({
+        "chat_id": chat_id,
+        "chat_name": chat_name,
+        "added_by_id": added_by_id,
+        "added_by_name": added_by_name,
+        "timestamp": datetime.now()
+    })
+
+def get_unauthorized_attempts():
+    """Obtiene todos los intentos no autorizados registrados."""
+    return list(db.unauthorized_groups.find({}, {"_id": 0}))

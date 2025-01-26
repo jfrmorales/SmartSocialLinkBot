@@ -1,6 +1,6 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import CallbackContext
-from db import get_all_groups, add_group, remove_group, is_group_allowed
+from db import get_all_groups, add_group, remove_group, is_group_allowed, get_unauthorized_attempts
 import logging
 from functools import wraps
 
@@ -33,10 +33,12 @@ async def menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("Listar Grupos", callback_data="listar_grupos")],
         [InlineKeyboardButton("Agregar Grupo", callback_data="agregar_grupo")],
         [InlineKeyboardButton("Eliminar Grupo", callback_data="eliminar_grupo")],
+        [InlineKeyboardButton("Intentos no autorizados", callback_data="listar_intentos")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     await update.message.reply_text("Selecciona una opción:", reply_markup=reply_markup)
 
+@admin_only
 async def button_handler(update: Update, context: CallbackContext):
     """Maneja los botones del menú."""
     query = update.callback_query
@@ -45,9 +47,17 @@ async def button_handler(update: Update, context: CallbackContext):
     if query.data == "listar_grupos":
         await listar_grupos(update, context)
     elif query.data == "agregar_grupo":
-        await query.edit_message_text("Envíame el ID del grupo a agregar usando el formato:\n`/agregar_grupo <ID_GRUPO>`", parse_mode="Markdown")
+        await query.edit_message_text(
+            "Envíame el ID del grupo a agregar usando el formato:\n`/agregar_grupo <ID_GRUPO>`", 
+            parse_mode="Markdown"
+        )
     elif query.data == "eliminar_grupo":
-        await query.edit_message_text("Envíame el ID del grupo a eliminar usando el formato:\n`/eliminar_grupo <ID_GRUPO>`", parse_mode="Markdown")
+        await query.edit_message_text(
+            "Envíame el ID del grupo a eliminar usando el formato:\n`/eliminar_grupo <ID_GRUPO>`", 
+            parse_mode="Markdown"
+        )
+    elif query.data == "listar_intentos":
+        await listar_intentos_no_autorizados(update, context)
 
 @admin_only
 async def listar_grupos(update: Update, context: CallbackContext):
@@ -107,6 +117,23 @@ async def eliminar_grupo(update: Update, context: CallbackContext):
     except Exception as e:
         logger.error(f"Error al intentar salir del grupo con ID {chat_id}: {e}")
         await update.message.reply_text(f"Hubo un error al intentar salir del grupo con ID {chat_id}.")
+        
+@admin_only
+async def listar_intentos_no_autorizados(update: Update, context: CallbackContext):
+    """Lista los intentos no autorizados de añadir el bot a grupos."""
+    attempts = get_unauthorized_attempts()
+    if not attempts:
+        await update.callback_query.edit_message_text("No se han registrado intentos no autorizados.")
+        return
+
+    response = "Intentos no autorizados:\n"
+    for attempt in attempts:
+        response += (
+            f"- Grupo: {attempt['chat_name']} (ID: {attempt['chat_id']})\n"
+            f"  Añadido por: {attempt['added_by_name']} (ID: {attempt['added_by_id']})\n"
+            f"  Fecha: {attempt['timestamp']}\n\n"
+        )
+    await update.callback_query.edit_message_text(response)
 
 @admin_only
 async def admin_help(update: Update, context: CallbackContext):

@@ -1,25 +1,28 @@
 from telegram import Update, Chat
 from telegram.ext import CallbackContext
-from db import is_group_allowed, add_group
+from db import is_group_allowed, add_group, log_unauthorized_group, remove_group
 import logging, re
 from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
+from db import is_group_allowed, add_group, log_unauthorized_group
+
 async def handle_group_join(update: Update, context: CallbackContext):
-    """Gestiona cuando el bot es añadido a un grupo."""
+    """Gestiona cuando el bot es añadido o eliminado de un grupo."""
     chat = update.effective_chat
     chat_id = str(chat.id)
     chat_name = chat.title or "Desconocido"
+    added_or_removed_by = update.my_chat_member.from_user
 
-    # Verificar si el bot fue añadido al grupo
     new_status = update.my_chat_member.new_chat_member.status
+    old_status = update.my_chat_member.old_chat_member.status
+
     if new_status == "member":  # Bot añadido al grupo
         if is_group_allowed(chat_id):
             logger.info(f"El bot ya está autorizado en el grupo: {chat_name} (ID: {chat_id}).")
         else:
-            # Verificar si el administrador fue quien añadió al bot
-            if update.my_chat_member.from_user.id == context.bot_data["admin_id"]:
+            if added_or_removed_by.id == context.bot_data["admin_id"]:
                 logger.info(f"El administrador añadió el bot al grupo: {chat_name} (ID: {chat_id}). Registrando automáticamente...")
                 add_group(chat_id, chat_name)
                 await context.bot.send_message(
@@ -27,13 +30,19 @@ async def handle_group_join(update: Update, context: CallbackContext):
                     text=f"El grupo '{chat_name}' (ID: {chat_id}) ha sido registrado automáticamente."
                 )
             else:
+                log_unauthorized_group(
+                    chat_id=chat_id,
+                    chat_name=chat_name,
+                    added_by_id=added_or_removed_by.id,
+                    added_by_name=f"{added_or_removed_by.first_name} {added_or_removed_by.last_name or ''}".strip()
+                )
                 logger.warning(f"El bot fue añadido a un grupo no autorizado: {chat_name} (ID: {chat_id}). Saliendo...")
-                try:
-                    await context.bot.leave_chat(chat_id)
-                    logger.info(f"El bot salió del grupo {chat_name} (ID: {chat_id}).")
-                except Exception as e:
-                    logger.error(f"Error al intentar salir del grupo {chat_name} (ID: {chat_id}): {e}")
-
+                await context.bot.leave_chat(chat_id)
+    elif new_status in ["kicked", "left"]:  # Bot eliminado del grupo
+        if is_group_allowed(chat_id):
+            logger.info(f"El bot fue eliminado del grupo autorizado: {chat_name} (ID: {chat_id}). Eliminando de la base de datos...")
+            remove_group(chat_id)
+            logger.info(f"El grupo '{chat_name}' (ID: {chat_id}) ha sido eliminado de los autorizados.")
 
 async def process_message(update: Update, context: CallbackContext):
     """Procesa mensajes en grupos autorizados y corrige enlaces con dominios repetidos."""

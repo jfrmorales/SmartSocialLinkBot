@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 import os
 
 from db import create_database
-from commands import menu, listar_grupos, agregar_grupo, eliminar_grupo, admin_help, button_handler
+from commands import menu, listar_grupos, agregar_grupo, eliminar_grupo, admin_help, button_handler, listar_intentos_no_autorizados
 from handlers import process_message, handle_group_join
 
 # Configuración de logging
@@ -41,6 +41,7 @@ def main():
     app.add_handler(CommandHandler("listar_grupos", listar_grupos))
     app.add_handler(CommandHandler("agregar_grupo", agregar_grupo))
     app.add_handler(CommandHandler("eliminar_grupo", eliminar_grupo))
+    app.add_handler(CommandHandler("listar_intentos", listar_intentos_no_autorizados))
     app.add_handler(CommandHandler("help", admin_help))
 
     # Manejadores de botones del menú
