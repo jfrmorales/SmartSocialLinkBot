@@ -6,28 +6,26 @@ from urllib.parse import urlparse, urlunparse
 
 logger = logging.getLogger(__name__)
 
-from db import is_group_allowed, add_group, log_unauthorized_group
-
 async def handle_group_join(update: Update, context: CallbackContext):
-    """Gestiona cuando el bot es añadido o eliminado de un grupo."""
+    """Handles when the bot is added or removed from a group."""
     chat = update.effective_chat
     chat_id = str(chat.id)
-    chat_name = chat.title or "Desconocido"
+    chat_name = chat.title or "Unknown"
     added_or_removed_by = update.my_chat_member.from_user
 
     new_status = update.my_chat_member.new_chat_member.status
     old_status = update.my_chat_member.old_chat_member.status
 
-    if new_status == "member":  # Bot añadido al grupo
+    if new_status == "member":  # Bot added to the group
         if is_group_allowed(chat_id):
-            logger.info(f"El bot ya está autorizado en el grupo: {chat_name} (ID: {chat_id}).")
+            logger.info(f"The bot is already authorized in the group: {chat_name} (ID: {chat_id}).")
         else:
             if added_or_removed_by.id == context.bot_data["admin_id"]:
-                logger.info(f"El administrador añadió el bot al grupo: {chat_name} (ID: {chat_id}). Registrando automáticamente...")
+                logger.info(f"The admin added the bot to the group: {chat_name} (ID: {chat_id}). Automatically registering...")
                 add_group(chat_id, chat_name)
                 await context.bot.send_message(
                     chat_id=chat_id,
-                    text=f"El grupo '{chat_name}' (ID: {chat_id}) ha sido registrado automáticamente."
+                    text=f"The group '{chat_name}' (ID: {chat_id}) has been registered automatically."
                 )
             else:
                 log_unauthorized_group(
@@ -36,36 +34,36 @@ async def handle_group_join(update: Update, context: CallbackContext):
                     added_by_id=added_or_removed_by.id,
                     added_by_name=f"{added_or_removed_by.first_name} {added_or_removed_by.last_name or ''}".strip()
                 )
-                logger.warning(f"El bot fue añadido a un grupo no autorizado: {chat_name} (ID: {chat_id}). Saliendo...")
+                logger.warning(f"The bot was added to an unauthorized group: {chat_name} (ID: {chat_id}). Leaving...")
                 await context.bot.leave_chat(chat_id)
-    elif new_status in ["kicked", "left"]:  # Bot eliminado del grupo
+    elif new_status in ["kicked", "left"]:  # Bot removed from the group
         if is_group_allowed(chat_id):
-            logger.info(f"El bot fue eliminado del grupo autorizado: {chat_name} (ID: {chat_id}). Eliminando de la base de datos...")
+            logger.info(f"The bot was removed from an authorized group: {chat_name} (ID: {chat_id}). Removing from the database...")
             remove_group(chat_id)
-            logger.info(f"El grupo '{chat_name}' (ID: {chat_id}) ha sido eliminado de los autorizados.")
+            logger.info(f"The group '{chat_name}' (ID: {chat_id}) has been removed from the authorized list.")
 
 async def process_message(update: Update, context: CallbackContext):
-    """Procesa mensajes en grupos autorizados y corrige enlaces con dominios repetidos."""
+    """Processes messages in authorized groups and fixes repeated domain links."""
     chat = update.effective_chat
     if chat.type in [Chat.GROUP, Chat.SUPERGROUP]:
         chat_id = str(chat.id)
-        chat_name = chat.title or "Nombre desconocido"
+        chat_name = chat.title or "Unknown"
 
         if not is_group_allowed(chat_id):
-            logger.warning(f"Mensaje recibido de un grupo no autorizado: {chat_name} (ID: {chat_id})")
+            logger.warning(f"Message received from an unauthorized group: {chat_name} (ID: {chat_id})")
             return
 
-        logger.info(f"Procesando mensaje en grupo autorizado: {chat_name} (ID: {chat_id})")
+        logger.info(f"Processing message in authorized group: {chat_name} (ID: {chat_id})")
 
-        # Verificar si el mensaje es válido
+        # Check if the message is valid
         if not update.message or not update.message.text:
-            logger.warning(f"Actualización ignorada: No es un mensaje válido en {chat_name} (ID: {chat_id})")
+            logger.warning(f"Update ignored: Not a valid message in {chat_name} (ID: {chat_id})")
             return
 
         message_text = update.message.text.strip()
         user_mention = f"[{update.message.from_user.first_name}](tg://user?id={update.message.from_user.id})"
 
-        # Expresión regular para detectar dominios repetidos
+        # Regex to detect repeated domains
         domain_regex = re.compile(
             r"(https?://(?:www\.)?(instagram\.com|twitter\.com|x\.com|tiktok\.com|fixupx\.com|ddinstagram\.com|vxtiktok\.com))((?:\2)+)"
         )
@@ -76,11 +74,11 @@ async def process_message(update: Update, context: CallbackContext):
 
         corrected_text = domain_regex.sub(normalize_domain, message_text)
 
-        # Ajuste para URLs deformadas específicamente con "fixup" repetido (p. ej. fixupfixupx.com)
+        # Specific adjustment for malformed URLs with repeated "fixup"
         fixup_repeated_regex = re.compile(r"(https?://(?:www\.)?)(?:fixup)+(x\.com)")
         corrected_text = fixup_repeated_regex.sub(lambda m: f"{m.group(1)}fixupx.com", corrected_text)
 
-        # Ajustes específicos para repeticiones de ciertos dominios base (opcional, si hay casos similares)
+        # Adjustments for specific repeated base domains
         instagram_repeated_regex = re.compile(r"(https?://(?:www\.)?)(?:instagram)+(\.com)")
         corrected_text = instagram_repeated_regex.sub(lambda m: f"{m.group(1)}instagram.com", corrected_text)
 
@@ -99,9 +97,7 @@ async def process_message(update: Update, context: CallbackContext):
         x_repeated_regex = re.compile(r"(https?://(?:www\.)?)(?:x)+(\.com)")
         corrected_text = x_repeated_regex.sub(lambda m: f"{m.group(1)}x.com", corrected_text)
 
-        # --- Paso final: parsear cada URL y forzar la normalización ---
-        # Así nos aseguramos de que casos como "fixupfixupx" se queden en "fixupx.com",
-        # "instagram.com" pase a "ddinstagram.com", etc. sin más repeticiones.
+        # Final step: Parse each URL and enforce normalization
         url_pattern = re.compile(r"(https?://[^\s]+)")
 
         def final_normalize_url(original_url):
@@ -109,57 +105,49 @@ async def process_message(update: Update, context: CallbackContext):
                 parsed = urlparse(original_url)
                 netloc = parsed.netloc.lower()
 
-                # Normalizamos estos dominios principales
-                # Si netloc contiene "instagram.com" => ddinstagram.com
+                # Normalize main domains
                 if "instagram.com" in netloc:
                     netloc = "ddinstagram.com"
-                # Si netloc contiene "twitter.com" o "x.com" o "fixup" => fixupx.com
                 elif "twitter.com" in netloc or "x.com" in netloc or "fixup" in netloc:
                     netloc = "fixupx.com"
-                # Si netloc contiene "tiktok.com" => vxtiktok.com
                 elif "tiktok.com" in netloc:
                     netloc = "vxtiktok.com"
 
                 normalized = parsed._replace(netloc=netloc)
                 return urlunparse(normalized)
             except Exception:
-                # Si algo falla, regresamos la URL original sin cambios
                 return original_url
 
         found_urls = url_pattern.findall(corrected_text)
         for url in found_urls:
             new_url = final_normalize_url(url)
             corrected_text = corrected_text.replace(url, new_url)
-        # --- Fin del paso final de normalización ---
 
-        # En este punto, corrected_text es el texto definitivo corregido
-        # Mantenemos la variable 'modified_link' para reutilizar la lógica ya existente
         modified_link = corrected_text
 
-        if modified_link != message_text:  # Solo actuamos si hubo algún cambio en las URLs
+        if modified_link != message_text:  # Act only if changes were made
             try:
                 chat_member = await context.bot.get_chat_member(chat_id, context.bot.id)
                 if chat_member.can_delete_messages:
-                    # Eliminar el mensaje original del usuario
                     await context.bot.delete_message(chat_id, update.message.message_id)
-                    logger.info(f"Mensaje eliminado en el grupo {chat_name} (ID: {chat_id}).")
+                    logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
 
                     new_message = (
-                        f"Enviado por {user_mention}\n\n"
-                        f"[Enlace modificado]({modified_link})"
+                        f"Sent by {user_mention}\n\n"
+                        f"[Modified link]({modified_link})"
                     )
                     await context.bot.send_message(chat_id=chat_id, text=new_message, parse_mode="Markdown")
                 else:
-                    logger.warning(f"El bot no tiene permisos para borrar mensajes en {chat_name} (ID: {chat_id}).")
+                    logger.warning(f"The bot does not have permissions to delete messages in {chat_name} (ID: {chat_id}).")
                     reply_message = (
-                        f"Enviado por {user_mention}\n\n"
-                        f"[Enlace modificado]({modified_link})"
+                        f"Sent by {user_mention}\n\n"
+                        f"[Modified link]({modified_link})"
                     )
                     await update.message.reply_text(reply_message, parse_mode="Markdown")
             except Exception as e:
-                logger.error(f"Error al intentar procesar el mensaje en {chat_name} (ID: {chat_id}): {e}")
+                logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
                 fallback_message = (
-                    f"Enviado por {user_mention}\n\n"
-                    f"[Enlace modificado]({modified_link})"
+                    f"Sent by {user_mention}\n\n"
+                    f"[Modified link]({modified_link})"
                 )
                 await update.message.reply_text(fallback_message, parse_mode="Markdown")

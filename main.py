@@ -11,50 +11,50 @@ from dotenv import load_dotenv
 import os
 
 from db import create_database
-from commands import menu, listar_grupos, agregar_grupo, eliminar_grupo, admin_help, button_handler, listar_intentos_no_autorizados
+from commands import menu, list_groups, add_group, remove_group, admin_help, button_handler, list_unauthorized_attempts
 from handlers import process_message, handle_group_join
 
-# Configuración de logging
+# Logging configuration
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# Cargar variables de entorno
+# Load environment variables
 load_dotenv(dotenv_path="config/.env")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 ADMIN_ID = int(os.getenv("ADMIN_ID"))
 
 if not BOT_TOKEN or not ADMIN_ID:
-    raise ValueError("El token del bot o el ID del administrador no están definidos en el archivo .env")
+    raise ValueError("The bot token or admin ID are not defined in the .env file")
 
 def main():
-    # Verificar o crear la base de datos al iniciar
+    # Ensure the database is created or verified on startup
     create_database()
 
-    # Crear la aplicación del bot
+    # Create the bot application
     app = ApplicationBuilder().token(BOT_TOKEN).build()
 
-    # Configurar datos globales del bot
+    # Set global bot data
     app.bot_data["admin_id"] = ADMIN_ID
 
-    # Manejadores de comandos
-    app.add_handler(CommandHandler("menu", menu))  # Menú interactivo
-    app.add_handler(CommandHandler("listar_grupos", listar_grupos))
-    app.add_handler(CommandHandler("agregar_grupo", agregar_grupo))
-    app.add_handler(CommandHandler("eliminar_grupo", eliminar_grupo))
-    app.add_handler(CommandHandler("listar_intentos", listar_intentos_no_autorizados))
+    # Command handlers
+    app.add_handler(CommandHandler("menu", menu))  # Interactive menu
+    app.add_handler(CommandHandler("list_groups", list_groups))
+    app.add_handler(CommandHandler("add_group", add_group))
+    app.add_handler(CommandHandler("remove_group", remove_group))
+    app.add_handler(CommandHandler("list_attempts", list_unauthorized_attempts))
     app.add_handler(CommandHandler("help", admin_help))
 
-    # Manejadores de botones del menú
+    # Menu button handlers
     app.add_handler(CallbackQueryHandler(button_handler))
 
-    # Manejadores de mensajes
+    # Message handlers
     app.add_handler(MessageHandler(filters.ALL & ~filters.COMMAND, process_message))
 
-    # Manejador para eventos cuando el bot es añadido a un grupo
+    # Handler for events when the bot is added to a group
     app.add_handler(ChatMemberHandler(handle_group_join, ChatMemberHandler.MY_CHAT_MEMBER))
 
-    # Iniciar el bot
-    logger.info("Bot iniciado y en ejecución...")
+    # Start the bot
+    logger.info("Bot started and running...")
     app.run_polling()
 
 if __name__ == "__main__":

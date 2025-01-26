@@ -5,91 +5,92 @@
 
 [![Support me on Ko-fi](https://storage.ko-fi.com/cdn/kofi2.png?v=3)](https://ko-fi.com/S6S119KZVL)
 
-SmartSocialLinkBot es un bot para Telegram diseñado para manejar enlaces de redes sociales (Instagram, Twitter/X, TikTok) en grupos autorizados. Este bot puede corregir enlaces mal formateados, reemplazar dominios específicos y asegurar que los enlaces sean compartidos en el formato deseado.
-
-SmartSocialLinkBot is a Telegram bot designed to handle social media links (Instagram, Twitter/X, TikTok) in authorized groups. This bot can fix malformed links, replace specific domains, and ensure links are shared in the desired format.
+**SmartSocialLinkBot** is a Telegram bot designed to manage social media links (Instagram, Twitter/X, TikTok) within authorized groups. The bot can fix malformed links, replace specific domains, and ensure links are shared in the desired format. 
 
 ---
 
-## Características principales / Key Features
+## Key Features
 
-### Gestión de grupos / Group Management
-- **Lista blanca de grupos / White-listed Groups:** El bot funciona solo en los grupos autorizados previamente.
-- **Registro automático de grupos / Automatic Group Registration:** Si el administrador del bot lo añade a un grupo, este se registra automáticamente en la base de datos.
-- **Expulsión automática / Automatic Expulsion:** Si el bot es añadido a un grupo no autorizado, se expulsa automáticamente.
+### Group Management
+- **White-listed Groups:** The bot operates only in groups explicitly authorized by the admin.
+- **Automatic Group Registration:** If the admin adds the bot to a group, it automatically registers the group in the database.
+- **Automatic Expulsion:** If the bot is added to an unauthorized group, it removes itself automatically.
+- **Interactive Group Removal:** Groups can now be removed interactively via the menu or by providing the group ID using the `/remove_group` command.
 
-### Procesamiento de enlaces / Link Processing
-- **Corrección de enlaces mal formateados / Malformed Link Correction:** Normaliza enlaces mal formados, por ejemplo:
+### Link Processing
+- **Malformed Link Correction:** The bot normalizes malformed links. For example:
   - `https://fixupfixupx.com` → `https://fixupx.com`
   - `https://instagram.com` → `https://ddinstagram.com`
-- **Reemplazo de dominios / Domain Replacement:** Cambia automáticamente dominios de redes sociales según las reglas configuradas.
+- **Domain Replacement:** The bot replaces specific domains based on configured rules:
   - `instagram.com` → `ddinstagram.com`
-  - `twitter.com` o `x.com` → `fixupx.com`
+  - `twitter.com` or `x.com` → `fixupx.com`
   - `tiktok.com` → `vxtiktok.com`
 
-### Manejo de permisos / Permissions Handling
-- **Edición o eliminación de mensajes / Message Editing or Deletion:** Si el bot tiene permisos para eliminar mensajes, elimina el original y envía uno nuevo con el enlace corregido.
-- **Respuestas alternativas / Alternative Replies:** Si el bot no tiene permisos para eliminar mensajes, responde al mensaje original con el enlace corregido.
+### Permissions Handling
+- **Message Editing or Deletion:** If the bot has permission to delete messages, it deletes the original and sends a new message with the corrected link.
+- **Alternative Replies:** If the bot cannot delete messages, it replies to the original message with the corrected link.
+
+### Simplified Group ID Handling
+- You no longer need to prepend a negative symbol to group IDs when adding or removing groups. The bot automatically handles it.
 
 ---
 
-## Comandos disponibles / Available Commands
+## Available Commands
 
-### Administrador / Admin
-Estos comandos solo pueden ser ejecutados por el administrador registrado en el bot:
-
+### Admin Commands
 These commands can only be executed by the registered admin of the bot:
 
-- `/menu` - Muestra un menú interactivo con botones para administrar el bot. / Displays an interactive menu with buttons to manage the bot.
-- `/listar_grupos` - Lista todos los grupos donde el bot está autorizado. / Lists all groups where the bot is authorized.
-- `/agregar_grupo <ID_GRUPO>` - Agrega manualmente un grupo a la lista autorizada. / Manually adds a group to the authorized list.
-- `/eliminar_grupo <ID_GRUPO>` - Elimina un grupo de la lista autorizada y expulsa al bot del mismo. / Removes a group from the authorized list and expels the bot from it.
-- `/help` - Muestra una lista de comandos disponibles. / Displays a list of available commands.
+- `/menu` - Displays an interactive menu with buttons to manage the bot.
+- `/list_groups` - Lists all groups where the bot is authorized.
+- `/add_group <GROUP_ID>` - Manually adds a group to the authorized list.
+- `/remove_group <GROUP_ID>` - Removes a group from the authorized list and expels the bot from it. Groups can also be removed interactively via the menu.
+- `/list_attempts` - Lists all unauthorized attempts to add the bot to groups.
+- `/help` - Displays a list of available commands.
 
 ---
 
-## Instalación / Installation
+## Installation
 
-### Requisitos / Requirements
-- Python 3.10 o superior / Python 3.10 or higher.
-- MongoDB para almacenar la base de datos de grupos / MongoDB to store the group database.
-- Docker y Docker Compose (opcional para despliegue) / Docker and Docker Compose (optional for deployment).
+### Requirements
+- Python 3.10 or higher.
+- MongoDB to store group data.
+- Docker and Docker Compose (optional for deployment).
 
-### Configuración / Setup
-1. Clona este repositorio / Clone this repository:
+### Setup
+1. Clone this repository:
    ```bash
-   git clone <url_del_repositorio>
+   git clone <repository_url>
    cd SmartSocialLinkBot
    ```
 
-2. Crea un archivo `.env` en el directorio `config` con el siguiente contenido / Create a `.env` file in the `config` directory with the following content:
+2. Create a `.env` file inside the `config` directory with the following content:
    ```env
-   BOT_TOKEN=<tu_bot_token / your_bot_token>
-   ADMIN_ID=<tu_id_de_administrador / your_admin_id>
-   MONGO_URI=<uri_de_mongodb / your_mongodb_uri>
+   BOT_TOKEN=<your_bot_token>
+   ADMIN_ID=<your_admin_id>
+   MONGO_URI=<your_mongodb_uri>
    DB_NAME=telegram_bot
    ```
 
-3. Instala las dependencias / Install the dependencies:
+3. Install dependencies:
    ```bash
    pip install -r requirements.txt
    ```
 
-4. Ejecuta el bot / Run the bot:
+4. Run the bot:
    ```bash
    python main.py
    ```
 
 ---
 
-## Uso con Docker / Using Docker
+## Using Docker
 
-1. Construye la imagen de Docker / Build the Docker image:
+1. Build the Docker image:
    ```bash
    docker build -t smartsociallinkbot .
    ```
 
-2. Configura el archivo `docker-compose.yml` / Set up the `docker-compose.yml` file:
+2. Configure `docker-compose.yml` to deploy the bot and MongoDB:
    ```yaml
    services:
      bot:
@@ -101,49 +102,49 @@ These commands can only be executed by the registered admin of the bot:
          - ./config:/app/config:ro
        restart: always
      mongodb:
-       image: mongo:5.0
-       container_name: mongodb
+       image: mongo:6.0
+       container_name: telegram_bot_mongodb
        restart: always
        ports:
          - "27017:27017"
    ```
 
-3. Inicia los contenedores / Start the containers:
+3. Start the containers:
    ```bash
    docker-compose up -d
    ```
 
 ---
 
-## Arquitectura del proyecto / Project Architecture
+## Project Architecture
 
 ```
 SmartSocialLinkBot/
-├── main.py                # Archivo principal para inicializar el bot / Main file to initialize the bot
-├── commands.py            # Comandos del bot / Bot commands
-├── handlers.py            # Lógica de procesamiento de mensajes / Message processing logic
-├── db.py                  # Conexión y manejo de la base de datos / Database connection and handling
+├── main.py                # Main file to initialize the bot
+├── commands.py            # Bot commands
+├── handlers.py            # Message processing logic
+├── db.py                  # Database connection and handling
 ├── config/
-│   └── .env               # Archivo de configuración del bot / Bot configuration file
-├── requirements.txt       # Dependencias del proyecto / Project dependencies
-├── Dockerfile             # Configuración para Docker / Docker configuration
-└── docker-compose.yml     # Configuración para Docker Compose / Docker Compose configuration
+│   └── .env               # Bot configuration file
+├── requirements.txt       # Project dependencies
+├── Dockerfile             # Docker configuration
+└── docker-compose.yml     # Docker Compose configuration
 ```
 
 ---
 
-## Funcionalidades futuras / Future Features
-- Integración con nuevas redes sociales / Integration with new social networks.
-- Analíticas de uso del bot / Bot usage analytics.
+## Future Features
+- Integration with additional social networks.
+- Analytics to track bot usage and performance.
 
 ---
 
-## Contribuciones / Contributions
-¡Contribuciones son bienvenidas! Si tienes ideas o encuentras problemas, no dudes en abrir un issue o enviar un pull request.
-
-Contributions are welcome! If you have ideas or encounter issues, feel free to open an issue or submit a pull request.
+## Contributions
+Contributions are welcome! If you have ideas or encounter issues, feel free to:
+- Open an issue to report a bug or suggest a feature.
+- Submit a pull request with your contributions.
 
 ---
 
-## Licencia / License
-Este proyecto está licenciado bajo la [Licencia MIT / MIT License](LICENSE).
+## License
+This project is licensed under the [MIT License](LICENSE).

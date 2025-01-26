@@ -5,18 +5,18 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-# Conexión a MongoDB
+# MongoDB connection
 client = MongoClient(os.getenv("MONGO_URI"))
 db = client[os.getenv("DB_NAME")]
 
 def create_database():
-    """Asegura que la colección exista."""
+    """Ensures the collection exists."""
     if "groups" not in db.list_collection_names():
         db.create_collection("groups")
-        logger.info("Base de datos inicializada.")
+        logger.info("Database initialized.")
 
 def add_group(chat_id, chat_name):
-    """Agrega un grupo a la base de datos."""
+    """Adds a group to the database."""
     db.groups.update_one(
         {"_id": str(chat_id)},
         {"$set": {"name": chat_name}},
@@ -24,23 +24,23 @@ def add_group(chat_id, chat_name):
     )
 
 def remove_group(chat_id):
-    """Elimina un grupo de la base de datos."""
+    """Removes a group from the database."""
     result = db.groups.delete_one({"_id": str(chat_id)})
     if result.deleted_count > 0:
-        logger.info(f"Grupo eliminado de la base de datos: {chat_id}")
+        logger.info(f"Group removed from the database: {chat_id}")
     else:
-        logger.warning(f"No se encontró el grupo con ID {chat_id} en la base de datos.")
+        logger.warning(f"Group with ID {chat_id} not found in the database.")
 
 def get_all_groups():
-    """Obtiene todos los grupos de la base de datos."""
+    """Retrieves all groups from the database."""
     return list(db.groups.find({}, {"_id": 1, "name": 1}))
 
 def is_group_allowed(chat_id):
-    """Verifica si un grupo está en la base de datos."""
+    """Checks if a group is in the database."""
     return db.groups.count_documents({"_id": str(chat_id)}) > 0
 
 def log_unauthorized_group(chat_id, chat_name, added_by_id, added_by_name):
-    """Registra un intento fallido de añadir el bot a un grupo."""
+    """Logs an unauthorized attempt to add the bot to a group."""
     db.unauthorized_groups.insert_one({
         "chat_id": chat_id,
         "chat_name": chat_name,
@@ -50,5 +50,5 @@ def log_unauthorized_group(chat_id, chat_name, added_by_id, added_by_name):
     })
 
 def get_unauthorized_attempts():
-    """Obtiene todos los intentos no autorizados registrados."""
+    """Retrieves all logged unauthorized attempts."""
     return list(db.unauthorized_groups.find({}, {"_id": 0}))
