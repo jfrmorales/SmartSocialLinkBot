@@ -46,11 +46,13 @@ async def button_handler(update: Update, context: CallbackContext):
 
     if query.data == "list_groups":
         await list_groups(update, context)
+
     elif query.data == "add_group":
         await query.edit_message_text(
             "Send me the group ID to add using the format:\n`/add_group <GROUP_ID>`", 
             parse_mode="Markdown"
         )
+
     elif query.data == "remove_group":
         groups = get_all_groups()
         if not groups:
@@ -71,7 +73,7 @@ async def button_handler(update: Update, context: CallbackContext):
             "Unknown"
         )
 
-        # Fix the call to remove_group
+        # Call the remove_group function
         db_remove_group(chat_id)
         logger.info(f"Group removed via button: {chat_name} (ID: {chat_id})")
         await query.edit_message_text(f"The group '{chat_name}' (ID: {chat_id}) has been removed from the authorized list.")
@@ -82,6 +84,9 @@ async def button_handler(update: Update, context: CallbackContext):
         except Exception as e:
             logger.error(f"Error trying to leave the group with ID {chat_id}: {e}")
             await query.message.reply_text(f"An error occurred while trying to leave the group with ID {chat_id}.")
+
+    elif query.data == "list_attempts":
+        await list_unauthorized_attempts(update, context)
 
 @admin_only
 async def list_groups(update: Update, context: CallbackContext):
@@ -165,7 +170,7 @@ async def remove_group(update: Update, context: CallbackContext):
 @admin_only
 async def list_unauthorized_attempts(update: Update, context: CallbackContext):
     """Lists unauthorized attempts to add the bot to groups."""
-    attempts = get_unauthorized_attempts()
+    attempts = get_unauthorized_attempts()  # Fetch attempts from the database
     if not attempts:
         await update.callback_query.edit_message_text("No unauthorized attempts have been recorded.")
         return
