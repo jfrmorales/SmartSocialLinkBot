@@ -7,6 +7,32 @@ from functools import wraps
 
 logger = logging.getLogger(__name__)
 
+async def send_response(update: Update, text: str, reply_markup=None, parse_mode=None):
+    """Helper function to send responses for both callback queries and regular messages."""
+    if update.callback_query:
+        await update.callback_query.edit_message_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+    else:
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=parse_mode)
+
+def validate_chat_id(chat_id: str) -> tuple[bool, str]:
+    """Validates and normalizes a chat ID."""
+    if not chat_id:
+        return False, "Chat ID cannot be empty."
+    
+    chat_id = chat_id.strip()
+    
+    # Remove leading minus if present for validation
+    clean_id = chat_id.replace("-", "")
+    
+    if not clean_id.isdigit():
+        return False, "Invalid group ID format. Please provide a numeric ID."
+    
+    # Ensure it has the minus prefix for groups
+    if not chat_id.startswith("-"):
+        chat_id = f"-{chat_id}"
+    
+    return True, chat_id
+
 def admin_only(func):
     """Decorator for commands and callbacks that only the admin can use."""
     @wraps(func)
@@ -32,7 +58,7 @@ async def menu(update: Update, context: CallbackContext):
         [InlineKeyboardButton("Unauthorized Attempts", callback_data="list_attempts")]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    await update.message.reply_text("Select an option:", reply_markup=reply_markup)
+    await send_response(update, "Select an option:", reply_markup=reply_markup)
 
 @admin_only
 async def button_handler(update: Update, context: CallbackContext):
@@ -51,7 +77,9 @@ async def button_handler(update: Update, context: CallbackContext):
     elif data == "remove_group_prompt":
         await remove_group(update, context)
     elif data.startswith("remove_"):
-        await remove_group(update, context)
+        # Extract chat_id from callback data (remove_CHAT_ID)
+        chat_id_to_remove = data[7:]  # Remove "remove_" prefix
+        await remove_group(update, context, chat_id_to_remove)
     elif data == "list_attempts":
         await list_unauthorized_attempts(update, context)
 
@@ -66,31 +94,29 @@ async def list_groups(update: Update, context: CallbackContext):
             response = "Currently authorized groups:\n"
             response += "\n".join([f"- {group.get('name', 'N/A')} (ID: {group['_id']})" for group in groups])
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(response)
-        else:
-            await update.message.reply_text(response)
+        await send_response(update, response)
     except Exception as e:
         logger.error(f"Error listing groups: {e}")
         error_message = "An error occurred while listing the groups."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
-        else:
-            await update.message.reply_text(error_message)
+        await send_response(update, error_message)
 
 @admin_only
 async def add_group(update: Update, context: CallbackContext):
     """Adds a group to the authorized list."""
     if not context.args:
-        await update.message.reply_text("Usage: /add_group <GROUP_ID>")
+        await send_response(update, "Usage: /add_group <GROUP_ID>")
         return
 
-    chat_id = context.args[0]
-    if not chat_id.startswith("-"):
-        chat_id = f"-{chat_id}"
+    # Validate and normalize chat_id
+    is_valid, result = validate_chat_id(context.args[0])
+    if not is_valid:
+        await send_response(update, result)
+        return
+    
+    chat_id = result
 
     if is_group_allowed(chat_id):
-        await update.message.reply_text(f"The group with ID {chat_id} is already authorized.")
+        await send_response(update, f"The group with ID {chat_id} is already authorized.")
         return
 
     try:
@@ -98,13 +124,13 @@ async def add_group(update: Update, context: CallbackContext):
         chat_name = chat.title or "Unknown"
         db_add_group(chat_id, chat_name)
         logger.info(f"Group added by admin: {chat_name} (ID: {chat_id})")
-        await update.message.reply_text(f"Group added: {chat_name} (ID: {chat_id})")
+        await send_response(update, f"Group added: {chat_name} (ID: {chat_id})")
     except TelegramError as e:
         logger.error(f"Error adding group {chat_id}: {e}")
-        await update.message.reply_text(f"Could not add group. Reason: {e.message}")
+        await send_response(update, f"Could not add group. Reason: {e.message}")
     except Exception as e:
         logger.error(f"An unexpected error occurred while adding group {chat_id}: {e}")
-        await update.message.reply_text("An unexpected error occurred.")
+        await send_response(update, "An unexpected error occurred.")
 
 @admin_only
 async def remove_group(update: Update, context: CallbackContext, chat_id_to_remove: str = None):
@@ -117,18 +143,18 @@ async def remove_group(update: Update, context: CallbackContext, chat_id_to_remo
     if not chat_id_to_remove:
         groups = get_all_groups()
         if not groups:
-            await update.message.reply_text("No authorized groups to display.")
+            await send_response(update, "No authorized groups to display.")
             return
         keyboard = [
             [InlineKeyboardButton(group.get('name', 'N/A'), callback_data=f"remove_{group['_id']}")]
             for group in groups
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
-        await update.message.reply_text("Select a group to remove:", reply_markup=reply_markup)
+        await send_response(update, "Select a group to remove:", reply_markup=reply_markup)
         return
 
     if not is_group_allowed(chat_id_to_remove):
-        await update.message.reply_text(f"The group with ID {chat_id_to_remove} is not authorized.")
+        await send_response(update, f"The group with ID {chat_id_to_remove} is not authorized.")
         return
 
     try:
@@ -136,21 +162,22 @@ async def remove_group(update: Update, context: CallbackContext, chat_id_to_remo
         logger.info(f"Group removed: ID {chat_id_to_remove}")
         message = f"The group with ID {chat_id_to_remove} has been removed from the authorized list."
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(message)
-        else:
-            await update.message.reply_text(message)
+        await send_response(update, message)
 
         try:
             await context.bot.leave_chat(chat_id_to_remove)
             logger.info(f"The bot left the group with ID {chat_id_to_remove}.")
         except TelegramError as e:
             logger.error(f"Error leaving group {chat_id_to_remove}: {e}")
-            await update.message.reply_text(f"Could not leave group. Reason: {e.message}")
+            error_message = f"Could not leave group. Reason: {e.message}"
+            if update.callback_query:
+                await update.callback_query.edit_message_text(f"{message}\n\n{error_message}")
+            else:
+                await update.message.reply_text(error_message)
 
     except Exception as e:
         logger.error(f"An unexpected error occurred while removing group {chat_id_to_remove}: {e}")
-        await update.message.reply_text("An unexpected error occurred.")
+        await send_response(update, "An unexpected error occurred.")
 
 @admin_only
 async def list_unauthorized_attempts(update: Update, context: CallbackContext):
@@ -168,17 +195,10 @@ async def list_unauthorized_attempts(update: Update, context: CallbackContext):
                     f"  Date: {attempt.get('timestamp', 'N/A')}\n\n"
                 )
         
-        if update.callback_query:
-            await update.callback_query.edit_message_text(response)
-        else:
-            await update.message.reply_text(response)
+        await send_response(update, response)
     except Exception as e:
         logger.error(f"Error listing unauthorized attempts: {e}")
-        error_message = "An error occurred while listing unauthorized attempts."
-        if update.callback_query:
-            await update.callback_query.edit_message_text(error_message)
-        else:
-            await update.message.reply_text(error_message)
+        await send_response(update, "An error occurred while listing unauthorized attempts.")
 
 @admin_only
 async def admin_help(update: Update, context: CallbackContext):
@@ -191,4 +211,4 @@ async def admin_help(update: Update, context: CallbackContext):
         "/remove_group <GROUP_ID> - Removes an authorized group.\n"
         "/help - Displays this help message.\n"
     )
-    await update.message.reply_text(response)
+    await send_response(update, response)

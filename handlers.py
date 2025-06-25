@@ -119,13 +119,23 @@ async def process_message(update: Update, context: CallbackContext):
         try:
             chat_member = await context.bot.get_chat_member(chat_id, context.bot.id)
             if chat_member.can_delete_messages:
+                # Store the original message's topic ID before deleting
+                original_thread_id = update.message.message_thread_id
+                
                 await context.bot.delete_message(chat_id, update.message.message_id)
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
                 new_message = (
                     f"Sent by {user_mention}\n\n"
                     f"[Modified link]({corrected_text})"
                 )
-                await context.bot.send_message(chat_id=chat_id, text=new_message, parse_mode="Markdown")
+                
+                # Send the new message with the same topic as the original
+                await context.bot.send_message(
+                    chat_id=chat_id, 
+                    text=new_message, 
+                    parse_mode="Markdown",
+                    message_thread_id=original_thread_id
+                )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
                 reply_message = f"[Modified link]({corrected_text})"
