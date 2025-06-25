@@ -1,0 +1,14 @@
+feat: Comprehensive project improvements
+
+This commit introduces a series of significant improvements to the SmartSocialLinkBot project, enhancing its robustness, maintainability, and deployment readiness.
+
+Key changes include:
+
+- **Enhanced Logging:** Implemented a robust logging system with daily rotating file handlers and a more detailed log format.
+- **Refactored URL Normalization:** The URL normalization logic was initially refactored and then reverted to the more robust original implementation after testing revealed a regression. Unit tests were added to cover this functionality.
+- **Improved Error Handling:** Added more specific error handling for Telegram API and database interactions, making the bot more resilient.
+- **Dependency Management:** Updated all dependencies to their latest stable versions and pinned them in `requirements.txt` for reproducible builds.
+- **Dockerization:** Overhauled the Docker setup to follow best practices, including a more secure `Dockerfile` and a persistent volume for logs in `docker-compose.yml`.
+- **Unit Testing:** Introduced a `tests` directory with unit tests for the URL normalization logic, ensuring code quality and preventing regressions.
+- **Configuration:** Created a `config` directory with a `.env.example` template to simplify initial setup.
+- **Gitignore:** Added a comprehensive `.gitignore` file to exclude sensitive files, logs, and other unnecessary artifacts from the repository.

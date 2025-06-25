@@ -1,4 +1,6 @@
 import logging
+from logging.handlers import TimedRotatingFileHandler
+import os
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -8,23 +10,48 @@ from telegram.ext import (
     filters
 )
 from dotenv import load_dotenv
-import os
 
 from db import create_database
 from commands import menu, list_groups, add_group, remove_group, admin_help, button_handler, list_unauthorized_attempts
 from handlers import process_message, handle_group_join
 
+# Create logs directory if it doesn't exist
+if not os.path.exists("logs"):
+    os.makedirs("logs")
+
 # Logging configuration
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+log_formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+
+# Handler for logging to a file that rotates daily
+file_handler = TimedRotatingFileHandler("logs/bot.log", when="midnight", interval=1, backupCount=7)
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
+
+# Handler for logging to the console
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
+
+# Get the root logger and add the handlers
+logger = logging.getLogger()
+logger.setLevel(logging.INFO)
+logger.addHandler(file_handler)
+logger.addHandler(console_handler)
 
 # Load environment variables
 load_dotenv(dotenv_path="config/.env")
 BOT_TOKEN = os.getenv("BOT_TOKEN")
-ADMIN_ID = int(os.getenv("ADMIN_ID"))
+ADMIN_ID = os.getenv("ADMIN_ID")
 
 if not BOT_TOKEN or not ADMIN_ID:
+    logger.error("The bot token or admin ID are not defined in the .env file")
     raise ValueError("The bot token or admin ID are not defined in the .env file")
+
+try:
+    ADMIN_ID = int(ADMIN_ID)
+except ValueError:
+    logger.error("ADMIN_ID is not a valid integer")
+    raise ValueError("ADMIN_ID must be an integer")
 
 def main():
     # Ensure the database is created or verified on startup
