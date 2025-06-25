@@ -84,7 +84,7 @@ async def handle_group_join(update: Update, context: CallbackContext):
                 )
                 logger.warning(f"Bot was added to an unauthorized group: {chat_name} (ID: {chat_id}). Leaving...")
                 await context.bot.leave_chat(chat_id)
-    elif new_status in ["kicked", "left"]:  # Bot removed
+    elif new_status in ["kicked", "left"]:
         if is_group_allowed(chat_id):
             logger.info(f"Bot was removed from an authorized group: {chat_name} (ID: {chat_id}). Removing from database...")
             remove_group(chat_id)

@@ -6,11 +6,12 @@ WORKDIR /app
 
 # Copiar los archivos necesarios
 COPY requirements.txt .
-COPY *.py .
-COPY config/.env ./config/.env
 
 # Instalar las dependencias del bot
 RUN pip install --no-cache-dir -r requirements.txt
+
+# Copiar todo el código fuente
+COPY . .
 
 # Configurar el comando de inicio del contenedor
 CMD ["python", "main.py"]
