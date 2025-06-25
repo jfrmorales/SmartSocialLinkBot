@@ -1,5 +1,6 @@
 import logging
 import re
+import json
 from urllib.parse import urlparse, urlunparse
 from telegram import Update, Chat
 from telegram.ext import CallbackContext
@@ -7,52 +8,44 @@ from db import is_group_allowed, add_group, log_unauthorized_group, remove_group
 
 logger = logging.getLogger(__name__)
 
-def normalize_netloc(netloc: str) -> str:
-    """
-    Normalize the netloc by ensuring that the second-level domain (SLD)
-    matches one of the allowed services. For example, if the SLD is
-    "tiktok" (or a repetition like "tiktiktiktok"), it will be replaced by "vxtiktok".
-    Subdomains (e.g. "vm.tiktok.com") are preserved.
-    """
-    parts = netloc.split('.')
-    if len(parts) < 2:
-        return netloc.lower()
-    subdomains = parts[:-2]
-    sld = parts[-2]
-    tld = parts[-1]
-    sld_lower = sld.lower()
+# Load domain mappings from the configuration file
+with open("config/mappings.json", "r") as f:
+    DOMAIN_MAPPINGS = json.load(f)
 
-    # Mapping: if the SLD is (possibly repeated) one of these keys, then replace it
-    mappings = {
-        "instagram": "ddinstagram",
-        "twitter": "fixupx",
-        "x": "fixupx",
-        "fixupx": "fixupx",
-        "tiktok": "vxtiktok"
-    }
-    for key, replacement in mappings.items():
-        # Match one or more repetitions of the key (case-insensitive)
-        pattern = re.compile(rf'^(?:{key})+$', re.IGNORECASE)
-        if pattern.match(sld_lower):
-            sld_lower = replacement
-            break
-    new_netloc = '.'.join(subdomains + [sld_lower, tld])
-    return new_netloc
-
-def final_normalize_url(original_url: str) -> str:
+def normalize_url(url: str) -> str:
     """
-    Parses the original URL, normalizes its netloc and scheme, and returns the corrected URL.
-    For TikTok URLs, only the 'tiktok' portion is replaced with 'vxtiktok' (e.g. vm.tiktok.com -> vm.vxtiktok.com).
+    Normalizes a URL by replacing its domain with a preferred one from the DOMAIN_MAPPINGS.
+    It handles subdomains and preserves the rest of the URL structure.
     """
     try:
-        parsed = urlparse(original_url)
-        normalized_netloc = normalize_netloc(parsed.netloc)
-        normalized_scheme = parsed.scheme.lower()
-        normalized = parsed._replace(scheme=normalized_scheme, netloc=normalized_netloc)
-        return urlunparse(normalized)
+        parsed_url = urlparse(url)
+        hostname = parsed_url.hostname
+
+        if not hostname:
+            return url
+
+        for original_domain, replacement_domain in DOMAIN_MAPPINGS.items():
+            if hostname.endswith(original_domain) and not hostname.endswith(replacement_domain):
+                # Replace the domain and keep subdomains
+                new_hostname = hostname.replace(original_domain, replacement_domain)
+                # Reconstruct the netloc to include credentials or port if they exist
+                netloc_parts = [new_hostname]
+                if parsed_url.port:
+                    netloc_parts.append(str(parsed_url.port))
+                new_netloc = ":".join(netloc_parts)
+                if parsed_url.username:
+                    userinfo = parsed_url.username
+                    if parsed_url.password:
+                        userinfo += ":" + parsed_url.password
+                    new_netloc = f"{userinfo}@{new_netloc}"
+                
+                return urlunparse(parsed_url._replace(netloc=new_netloc))
+
+        return url  # Return original URL if no mapping is found
+
     except Exception as e:
-        logger.error(f"Error normalizing URL {original_url}: {e}")
-        return original_url
+        logger.error(f"Error normalizing URL {url}: {e}")
+        return url
 
 async def handle_group_join(update: Update, context: CallbackContext):
     """Handles the bot being added or removed from a group."""
@@ -119,7 +112,7 @@ async def process_message(update: Update, context: CallbackContext):
     found_urls = url_pattern.findall(message_text)
     corrected_text = message_text
     for url in found_urls:
-        new_url = final_normalize_url(url)
+        new_url = normalize_url(url)
         corrected_text = corrected_text.replace(url, new_url)
 
     if corrected_text != message_text:
