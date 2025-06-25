@@ -51,8 +51,7 @@ async def button_handler(update: Update, context: CallbackContext):
     elif data == "remove_group_prompt":
         await remove_group(update, context)
     elif data.startswith("remove_"):
-        chat_id = data.split("_", 1)[1]
-        await remove_group(update, context, chat_id_to_remove=chat_id)
+        await remove_group(update, context)
     elif data == "list_attempts":
         await list_unauthorized_attempts(update, context)
 
