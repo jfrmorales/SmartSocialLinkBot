@@ -27,7 +27,17 @@ def normalize_url(url: str) -> str:
         for original_domain, replacement_domain in DOMAIN_MAPPINGS.items():
             if hostname.endswith(original_domain) and not hostname.endswith(replacement_domain):
                 # Replace the domain and keep subdomains
-                new_hostname = hostname.replace(original_domain, replacement_domain)
+                # Check if hostname is exactly the original domain or has a subdomain
+                if hostname == original_domain:
+                    new_hostname = replacement_domain
+                elif hostname.endswith('.' + original_domain):
+                    # Extract subdomain and append to replacement domain
+                    subdomain = hostname[:-len(original_domain)-1]
+                    new_hostname = subdomain + '.' + replacement_domain
+                else:
+                    # This means the domain is part of a larger domain name (e.g., "x.com" in "dominiox.com")
+                    # So we skip this mapping
+                    continue
                 # Reconstruct the netloc to include credentials or port if they exist
                 netloc_parts = [new_hostname]
                 if parsed_url.port:
