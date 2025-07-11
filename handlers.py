@@ -12,6 +12,47 @@ logger = logging.getLogger(__name__)
 with open("config/mappings.json", "r") as f:
     DOMAIN_MAPPINGS = json.load(f)
 
+def escape_markdown(text: str) -> str:
+    """
+    Escape special Markdown characters in text to prevent parsing errors.
+    This preserves the text as-is while preventing Markdown interpretation.
+    """
+    # Characters that need to be escaped in Markdown
+    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    
+    escaped_text = text
+    for char in special_chars:
+        escaped_text = escaped_text.replace(char, f'\\{char}')
+    
+    return escaped_text
+
+def process_message_for_markdown(text: str, urls_mapping: dict) -> str:
+    """
+    Process a message to escape Markdown characters while preserving URLs.
+    Returns the text with escaped characters and properly formatted links.
+    
+    Args:
+        text: The original message text
+        urls_mapping: Dict mapping original URLs to their replacements
+    """
+    # First, replace all URLs with placeholders to protect them from escaping
+    placeholders = {}
+    temp_text = text
+    
+    for i, (old_url, new_url) in enumerate(urls_mapping.items()):
+        placeholder = f"__URL_PLACEHOLDER_{i}__"
+        placeholders[placeholder] = f"[{new_url}]({new_url})"
+        temp_text = temp_text.replace(old_url, placeholder)
+    
+    # Escape markdown characters in the text (excluding placeholders)
+    escaped_text = escape_markdown(temp_text)
+    
+    # Replace placeholders with properly formatted URLs
+    for placeholder, formatted_url in placeholders.items():
+        escaped_text = escaped_text.replace(placeholder, formatted_url)
+    
+    return escaped_text
+
 def normalize_url(url: str) -> str:
     """
     Normalizes a URL by replacing its domain with a preferred one from the DOMAIN_MAPPINGS.
@@ -116,16 +157,21 @@ async def process_message(update: Update, context: CallbackContext):
         return
 
     message_text = update.message.text.strip()
-    user_mention = f"[{update.message.from_user.first_name}](tg://user?id={update.message.from_user.id})"
+    user_mention = f"[{escape_markdown(update.message.from_user.first_name)}](tg://user?id={update.message.from_user.id})"
 
     url_pattern = re.compile(r"(https?://[^\s]+)")
     found_urls = url_pattern.findall(message_text)
-    corrected_text = message_text
+    
+    # Create a mapping of original URLs to their normalized versions
+    url_mappings = {}
+    has_changes = False
     for url in found_urls:
         new_url = normalize_url(url)
-        corrected_text = corrected_text.replace(url, new_url)
+        if new_url != url:
+            has_changes = True
+        url_mappings[url] = new_url
 
-    if corrected_text != message_text:
+    if has_changes:
         try:
             chat_member = await context.bot.get_chat_member(chat_id, context.bot.id)
             if chat_member.can_delete_messages:
@@ -134,29 +180,25 @@ async def process_message(update: Update, context: CallbackContext):
                 
                 await context.bot.delete_message(chat_id, update.message.message_id)
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
-                # Create message with user mention as a separate entity
-                new_message = f"Sent by {update.message.from_user.first_name}\n\n{corrected_text}"
-                
-                # Create the text_mention entity
-                mention_entity = MessageEntity(
-                    type=MessageEntity.TEXT_MENTION,
-                    offset=8,  # "Sent by " is 8 characters
-                    length=len(update.message.from_user.first_name),
-                    user=update.message.from_user
-                )
+                # Process the message to escape markdown and format URLs
+                processed_text = process_message_for_markdown(message_text, url_mappings)
+                new_message = f"Sent by {user_mention}\n\n{processed_text}"
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=new_message,
                     message_thread_id=original_thread_id,
-                    entities=[mention_entity]
+                    parse_mode="Markdown"
                 )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
-                reply_message = f"{corrected_text}"
-                await update.message.reply_text(reply_message)
+                processed_text = process_message_for_markdown(message_text, url_mappings)
+                await update.message.reply_text(processed_text, parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
-            fallback_message = f"{corrected_text}"
-            await update.message.reply_text(fallback_message)
+            # Try without markdown as fallback
+            corrected_text = message_text
+            for url, new_url in url_mappings.items():
+                corrected_text = corrected_text.replace(url, new_url)
+            await update.message.reply_text(corrected_text)
