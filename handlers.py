@@ -136,7 +136,7 @@ async def process_message(update: Update, context: CallbackContext):
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
                 new_message = (
                     f"Sent by {user_mention}\n\n"
-                    f"[Modified link]({corrected_text})"
+                    f"{corrected_text}"
                 )
                 
                 # Send the new message with the same topic as the original
@@ -148,9 +148,9 @@ async def process_message(update: Update, context: CallbackContext):
                 )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
-                reply_message = f"[Modified link]({corrected_text})"
+                reply_message = f"{corrected_text}"
                 await update.message.reply_text(reply_message, parse_mode="Markdown")
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
-            fallback_message = f"[Modified link]({corrected_text})"
+            fallback_message = f"{corrected_text}"
             await update.message.reply_text(fallback_message, parse_mode="Markdown")
