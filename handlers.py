@@ -32,39 +32,34 @@ def format_message_with_links(text: str, url_mappings: dict) -> str:
     """
     Format message with proper MarkdownV2 escaping and clickable links.
     """
-    # Split text into parts, separating URLs from regular text
-    parts = []
-    last_end = 0
+    # Replace all URLs with "Modified link" hyperlinks
+    result = text
+    for old_url, new_url in url_mappings.items():
+        # Replace the URL with the markdown link
+        result = result.replace(old_url, f"[Modified link]({new_url})")
     
-    # Find all URLs and their positions
-    url_positions = []
-    for old_url in url_mappings:
-        start = text.find(old_url)
-        if start != -1:
-            url_positions.append((start, start + len(old_url), old_url))
+    # Escape the entire text for MarkdownV2, but preserve the markdown links
+    # First, temporarily replace markdown links with placeholders
+    link_placeholders = {}
+    link_pattern = re.compile(r'\[Modified link\]\([^)]+\)')
+    links = link_pattern.findall(result)
     
-    # Sort by position
-    url_positions.sort()
+    for i, link in enumerate(links):
+        placeholder = f"__LINK_PLACEHOLDER_{i}__"
+        link_placeholders[placeholder] = link
+        result = result.replace(link, placeholder)
     
-    # Process text parts
-    for start, end, old_url in url_positions:
-        # Add text before URL (escaped)
-        if start > last_end:
-            parts.append(escape_markdown_v2(text[last_end:start]))
-        
-        # Add formatted URL
-        new_url = url_mappings[old_url]
-        # Escape URL for MarkdownV2
-        escaped_url = escape_markdown_v2(new_url)
-        parts.append(f"[{escaped_url}]({new_url})")
-        
-        last_end = end
+    # Escape the text
+    result = escape_markdown_v2(result)
     
-    # Add remaining text
-    if last_end < len(text):
-        parts.append(escape_markdown_v2(text[last_end:]))
+    # Restore the links
+    for placeholder, link in link_placeholders.items():
+        result = result.replace(placeholder, link)
     
-    return ''.join(parts)
+    # Add quotes around the entire message
+    result = f'"{result}"'
+    
+    return result
 
 def normalize_url(url: str) -> str:
     """
