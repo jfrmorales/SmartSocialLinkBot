@@ -32,34 +32,20 @@ def format_message_with_links(text: str, url_mappings: dict) -> str:
     """
     Format message with proper MarkdownV2 escaping and clickable links.
     """
-    # Replace all URLs with "Modified link" hyperlinks
-    result = text
+    # First escape the entire text
+    escaped_text = escape_markdown_v2(text)
+    
+    # Then replace the escaped URLs with markdown links
     for old_url, new_url in url_mappings.items():
-        # Replace the URL with the markdown link
-        result = result.replace(old_url, f"[Modified link]({new_url})")
-    
-    # Escape the entire text for MarkdownV2, but preserve the markdown links
-    # First, temporarily replace markdown links with placeholders
-    link_placeholders = {}
-    link_pattern = re.compile(r'\[Modified link\]\([^)]+\)')
-    links = link_pattern.findall(result)
-    
-    for i, link in enumerate(links):
-        placeholder = f"__LINK_PLACEHOLDER_{i}__"
-        link_placeholders[placeholder] = link
-        result = result.replace(link, placeholder)
-    
-    # Escape the text
-    result = escape_markdown_v2(result)
-    
-    # Restore the links
-    for placeholder, link in link_placeholders.items():
-        result = result.replace(placeholder, link)
+        # Escape the old URL to match how it appears in the escaped text
+        escaped_old_url = escape_markdown_v2(old_url)
+        # Create the markdown link (no need to escape the display text)
+        markdown_link = f"[Modified link]({new_url})"
+        # Replace in the escaped text
+        escaped_text = escaped_text.replace(escaped_old_url, markdown_link)
     
     # Add quotes around the entire message
-    result = f'"{result}"'
-    
-    return result
+    return f'"{escaped_text}"'
 
 def normalize_url(url: str) -> str:
     """
@@ -191,7 +177,7 @@ async def process_message(update: Update, context: CallbackContext):
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
                 # Format the message with escaped text and clickable links
                 formatted_text = format_message_with_links(message_text, url_mappings)
-                new_message = f"Sent by {user_mention}\n\n{formatted_text}"
+                new_message = f"Sent by {user_mention}\n\n\n{formatted_text}"
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
