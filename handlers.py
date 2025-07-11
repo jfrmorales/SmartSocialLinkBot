@@ -28,24 +28,28 @@ def escape_markdown_v2(text: str) -> str:
     
     return result
 
-def format_message_with_links(text: str, url_mappings: dict) -> str:
+def format_message_with_links(text: str, url_mappings: dict) -> tuple:
     """
-    Format message with proper MarkdownV2 escaping and clickable links.
+    Format message with proper MarkdownV2 escaping, separating text from links.
+    Returns a tuple of (quoted_text, links_text)
     """
-    # First escape the entire text
-    escaped_text = escape_markdown_v2(text)
+    # Remove URLs from the text to get just the message
+    clean_text = text
+    for old_url in url_mappings:
+        clean_text = clean_text.replace(old_url, '').strip()
     
-    # Then replace the escaped URLs with markdown links
+    # Escape and quote the clean text
+    escaped_text = escape_markdown_v2(clean_text)
+    quoted_text = f'"{escaped_text}"' if clean_text else ''
+    
+    # Create the links part
+    links = []
     for old_url, new_url in url_mappings.items():
-        # Escape the old URL to match how it appears in the escaped text
-        escaped_old_url = escape_markdown_v2(old_url)
-        # Create the markdown link (no need to escape the display text)
-        markdown_link = f"[Modified link]({new_url})"
-        # Replace in the escaped text
-        escaped_text = escaped_text.replace(escaped_old_url, markdown_link)
+        links.append(f"[Modified link]({new_url})")
     
-    # Add quotes around the entire message
-    return f'"{escaped_text}"'
+    links_text = '\n'.join(links)
+    
+    return quoted_text, links_text
 
 def normalize_url(url: str) -> str:
     """
@@ -176,8 +180,13 @@ async def process_message(update: Update, context: CallbackContext):
                 await context.bot.delete_message(chat_id, update.message.message_id)
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
                 # Format the message with escaped text and clickable links
-                formatted_text = format_message_with_links(message_text, url_mappings)
-                new_message = f"Sent by {user_mention}\n\n\n{formatted_text}"
+                quoted_text, links_text = format_message_with_links(message_text, url_mappings)
+                message_parts = [f"Sent by {user_mention}"]
+                if quoted_text:
+                    message_parts.append(quoted_text)
+                if links_text:
+                    message_parts.append(links_text)
+                new_message = '\n'.join(message_parts)
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
@@ -188,8 +197,14 @@ async def process_message(update: Update, context: CallbackContext):
                 )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
-                formatted_text = format_message_with_links(message_text, url_mappings)
-                await update.message.reply_text(formatted_text, parse_mode="MarkdownV2")
+                quoted_text, links_text = format_message_with_links(message_text, url_mappings)
+                message_parts = []
+                if quoted_text:
+                    message_parts.append(quoted_text)
+                if links_text:
+                    message_parts.append(links_text)
+                reply_message = '\n'.join(message_parts)
+                await update.message.reply_text(reply_message, parse_mode="MarkdownV2")
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
             # Try without markdown as fallback
