@@ -2,7 +2,7 @@ import logging
 import re
 import json
 from urllib.parse import urlparse, urlunparse
-from telegram import Update, Chat
+from telegram import Update, Chat, MessageEntity
 from telegram.ext import CallbackContext
 from db import is_group_allowed, add_group, log_unauthorized_group, remove_group
 
@@ -134,23 +134,29 @@ async def process_message(update: Update, context: CallbackContext):
                 
                 await context.bot.delete_message(chat_id, update.message.message_id)
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
-                new_message = (
-                    f"Sent by {user_mention}\n\n"
-                    f"{corrected_text}"
+                # Create message with user mention as a separate entity
+                new_message = f"Sent by {update.message.from_user.first_name}\n\n{corrected_text}"
+                
+                # Create the text_mention entity
+                mention_entity = MessageEntity(
+                    type=MessageEntity.TEXT_MENTION,
+                    offset=8,  # "Sent by " is 8 characters
+                    length=len(update.message.from_user.first_name),
+                    user=update.message.from_user
                 )
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
                     chat_id=chat_id, 
-                    text=new_message, 
-                    parse_mode="Markdown",
-                    message_thread_id=original_thread_id
+                    text=new_message,
+                    message_thread_id=original_thread_id,
+                    entities=[mention_entity]
                 )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
                 reply_message = f"{corrected_text}"
-                await update.message.reply_text(reply_message, parse_mode="Markdown")
+                await update.message.reply_text(reply_message)
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
             fallback_message = f"{corrected_text}"
-            await update.message.reply_text(fallback_message, parse_mode="Markdown")
+            await update.message.reply_text(fallback_message)
