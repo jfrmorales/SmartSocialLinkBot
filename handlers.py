@@ -12,46 +12,59 @@ logger = logging.getLogger(__name__)
 with open("config/mappings.json", "r") as f:
     DOMAIN_MAPPINGS = json.load(f)
 
-def escape_markdown(text: str) -> str:
+def escape_markdown_v2(text: str) -> str:
     """
-    Escape special Markdown characters in text to prevent parsing errors.
-    This preserves the text as-is while preventing Markdown interpretation.
+    Escape special characters for MarkdownV2 in Telegram.
     """
-    # Characters that need to be escaped in Markdown
-    special_chars = ['_', '*', '[', ']', '(', ')', '~', '`', '>', '#', '+', '-', '=', '|', '{', '}', '.', '!']
+    # Characters that need to be escaped in MarkdownV2
+    escape_chars = '_*[]()~`>#+-=|{}.!'
     
-    escaped_text = text
-    for char in special_chars:
-        escaped_text = escaped_text.replace(char, f'\\{char}')
+    result = ""
+    for char in text:
+        if char in escape_chars:
+            result += "\\" + char
+        else:
+            result += char
     
-    return escaped_text
+    return result
 
-def process_message_for_markdown(text: str, urls_mapping: dict) -> str:
+def format_message_with_links(text: str, url_mappings: dict) -> str:
     """
-    Process a message to escape Markdown characters while preserving URLs.
-    Returns the text with escaped characters and properly formatted links.
-    
-    Args:
-        text: The original message text
-        urls_mapping: Dict mapping original URLs to their replacements
+    Format message with proper MarkdownV2 escaping and clickable links.
     """
-    # First, replace all URLs with placeholders to protect them from escaping
-    placeholders = {}
-    temp_text = text
+    # Split text into parts, separating URLs from regular text
+    parts = []
+    last_end = 0
     
-    for i, (old_url, new_url) in enumerate(urls_mapping.items()):
-        placeholder = f"__URL_PLACEHOLDER_{i}__"
-        placeholders[placeholder] = f"[{new_url}]({new_url})"
-        temp_text = temp_text.replace(old_url, placeholder)
+    # Find all URLs and their positions
+    url_positions = []
+    for old_url in url_mappings:
+        start = text.find(old_url)
+        if start != -1:
+            url_positions.append((start, start + len(old_url), old_url))
     
-    # Escape markdown characters in the text (excluding placeholders)
-    escaped_text = escape_markdown(temp_text)
+    # Sort by position
+    url_positions.sort()
     
-    # Replace placeholders with properly formatted URLs
-    for placeholder, formatted_url in placeholders.items():
-        escaped_text = escaped_text.replace(placeholder, formatted_url)
+    # Process text parts
+    for start, end, old_url in url_positions:
+        # Add text before URL (escaped)
+        if start > last_end:
+            parts.append(escape_markdown_v2(text[last_end:start]))
+        
+        # Add formatted URL
+        new_url = url_mappings[old_url]
+        # Escape URL for MarkdownV2
+        escaped_url = escape_markdown_v2(new_url)
+        parts.append(f"[{escaped_url}]({new_url})")
+        
+        last_end = end
     
-    return escaped_text
+    # Add remaining text
+    if last_end < len(text):
+        parts.append(escape_markdown_v2(text[last_end:]))
+    
+    return ''.join(parts)
 
 def normalize_url(url: str) -> str:
     """
@@ -157,7 +170,8 @@ async def process_message(update: Update, context: CallbackContext):
         return
 
     message_text = update.message.text.strip()
-    user_mention = f"[{escape_markdown(update.message.from_user.first_name)}](tg://user?id={update.message.from_user.id})"
+    user_name_escaped = escape_markdown_v2(update.message.from_user.first_name)
+    user_mention = f"[{user_name_escaped}](tg://user?id={update.message.from_user.id})"
 
     url_pattern = re.compile(r"(https?://[^\s]+)")
     found_urls = url_pattern.findall(message_text)
@@ -180,21 +194,21 @@ async def process_message(update: Update, context: CallbackContext):
                 
                 await context.bot.delete_message(chat_id, update.message.message_id)
                 logger.info(f"Message deleted in group {chat_name} (ID: {chat_id}).")
-                # Process the message to escape markdown and format URLs
-                processed_text = process_message_for_markdown(message_text, url_mappings)
-                new_message = f"Sent by {user_mention}\n\n{processed_text}"
+                # Format the message with escaped text and clickable links
+                formatted_text = format_message_with_links(message_text, url_mappings)
+                new_message = f"Sent by {user_mention}\n\n{formatted_text}"
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
                     chat_id=chat_id, 
                     text=new_message,
                     message_thread_id=original_thread_id,
-                    parse_mode="Markdown"
+                    parse_mode="MarkdownV2"
                 )
             else:
                 logger.warning(f"Bot lacks permissions to delete messages in {chat_name} (ID: {chat_id}).")
-                processed_text = process_message_for_markdown(message_text, url_mappings)
-                await update.message.reply_text(processed_text, parse_mode="Markdown")
+                formatted_text = format_message_with_links(message_text, url_mappings)
+                await update.message.reply_text(formatted_text, parse_mode="MarkdownV2")
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
             # Try without markdown as fallback
