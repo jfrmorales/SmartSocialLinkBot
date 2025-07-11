@@ -186,7 +186,7 @@ async def process_message(update: Update, context: CallbackContext):
                     message_parts.append(quoted_text)
                 if links_text:
                     message_parts.append(links_text)
-                new_message = '\n'.join(message_parts)
+                new_message = '\n\n'.join(message_parts)
                 
                 # Send the new message with the same topic as the original
                 await context.bot.send_message(
@@ -203,7 +203,7 @@ async def process_message(update: Update, context: CallbackContext):
                     message_parts.append(quoted_text)
                 if links_text:
                     message_parts.append(links_text)
-                reply_message = '\n'.join(message_parts)
+                reply_message = '\n\n'.join(message_parts)
                 await update.message.reply_text(reply_message, parse_mode="MarkdownV2")
         except Exception as e:
             logger.error(f"Error processing message in {chat_name} (ID: {chat_id}): {e}")
